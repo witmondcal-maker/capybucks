@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+# Sphinx writes pages under dest/<lang>/ because root_doc is en/index or
+# pt/index. After we hoist that folder, those pages sit one level higher
+# than Sphinx expected, so root assets are one `../` too far.
+_HOISTED_ASSET = re.compile(
+    r'(?P<attr>href|src)=(?P<q>["\'])'
+    r"(?P<up>(?:\.\./)+)"
+    r"(?P<rest>(?:_static/|_modules/|_images/|_sources/"
+    r"|search\.html|genindex\.html|py-modindex\.html)[^\"']*)"
+    r"(?P=q)"
+)
 
 ROOT = Path(__file__).resolve().parent
 HTML = ROOT / "_build" / "html"
@@ -14,11 +26,12 @@ def docs_prefix() -> str:
     return os.environ.get("DOCS_PREFIX", "/capybucks").rstrip("/")
 
 
-def flatten_lang_dir(dest: Path, lang: str) -> None:
+def flatten_lang_dir(dest: Path, lang: str) -> list[Path]:
     """Sphinx writes lang/index.md to dest/lang/; hoist it to dest/."""
     nested = dest / lang
+    moved: list[Path] = []
     if not nested.is_dir():
-        return
+        return moved
     for item in nested.iterdir():
         target = dest / item.name
         if target.exists():
@@ -27,7 +40,34 @@ def flatten_lang_dir(dest: Path, lang: str) -> None:
             else:
                 target.unlink()
         shutil.move(str(item), str(target))
+        moved.append(target)
     nested.rmdir()
+    return moved
+
+
+def _strip_one_parent(match: re.Match[str]) -> str:
+    up = match.group("up")[3:]
+    attr, quote, rest = match.group("attr", "q", "rest")
+    return f"{attr}={quote}{up}{rest}{quote}"
+
+
+def rewrite_hoisted_asset_paths(html: str) -> str:
+    """Drop one `../` from links to Sphinx root assets after flatten."""
+    return _HOISTED_ASSET.sub(_strip_one_parent, html)
+
+
+def rewrite_moved_html(moved: list[Path]) -> None:
+    files: list[Path] = []
+    for path in moved:
+        if path.is_dir():
+            files.extend(path.rglob("*.html"))
+        elif path.suffix == ".html":
+            files.append(path)
+    for html_path in files:
+        original = html_path.read_text(encoding="utf-8")
+        updated = rewrite_hoisted_asset_paths(original)
+        if updated != original:
+            html_path.write_text(updated, encoding="utf-8")
 
 
 def build(lang: str) -> None:
@@ -44,7 +84,8 @@ def build(lang: str) -> None:
         str(dest),
     ]
     subprocess.check_call(cmd, env=env)
-    flatten_lang_dir(dest, lang)
+    moved = flatten_lang_dir(dest, lang)
+    rewrite_moved_html(moved)
 
 
 def write_chooser() -> None:
