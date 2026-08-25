@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+
+# Virtualenv / uv
+.venv/
+.uv/
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+
+# Sphinx HTML
+docs/_build/
+.cache/
+*.parquet
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
