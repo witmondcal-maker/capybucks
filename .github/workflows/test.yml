@@ -25,3 +25,8 @@ jobs:
         env:
           DOCS_PREFIX: /capybucks
         run: uv run --group docs python docs/build.py
+      - name: Sphinx asset paths after flatten
+        run: |
+          grep -F 'href="_static/styles/pydata-sphinx-theme.css' docs/_build/html/en/index.html
+          grep -F 'href="../_static/styles/pydata-sphinx-theme.css' docs/_build/html/en/guide/download.html
+          grep -F 'href="_static/styles/pydata-sphinx-theme.css' docs/_build/html/pt/index.html
